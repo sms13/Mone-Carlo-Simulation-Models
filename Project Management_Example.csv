@@ -1,0 +1,8 @@
+Activities,Predecessor_1,Predecessor_2,Predecessor_3,Average_Duration,Percent_Uncertainty
+1,-1,-1,-1,21,9.5238095
+2,1,-1,-1,5,20
+3,1,-1,-1,7.5,20
+4,2,-1,-1,2,50
+5,3,4,-1,7.5,33.3333333
+6,3,4,-1,7.5,33.3333333
+7,5,6,-1,2,50
