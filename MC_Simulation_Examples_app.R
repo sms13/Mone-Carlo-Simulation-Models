@@ -8,7 +8,9 @@
 # to both Monte Carlo simulation in R, and embedding a simulation model in a Shiny app.
 # A stand-alone R script version for the Newsvendor example, which is stripped of all Shiny aspects (e.g., 
 # no user interface, reactivity, etc), can be found in Newsvendor.R 
-
+# There are currently two examples in this app:
+# 1) Newsvendor
+# 2) Project Management
 #####################################################################
 
 library(shiny)
