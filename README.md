@@ -10,5 +10,6 @@ Newsvendor_RMD.rmd is an R Markdown (essentially an R notebook) approach to the 
 
 For those who prefer Python to R, Newsvendor.ipynb is a Python/Jupter Notebook version of the Newsvendor problem.
 
-MC_Simulation_Examples_app.R is a Shiny app that includes both the Newvendor example on one tab, and the Project Management simulation example on another tab.  Project Management_Example.csv is an example file that can be uploaded in the "file upload" mode of the Project Management Simulation.
+MC_Simulation_Examples_app.R is a Shiny app that includes both the Newvendor example on one tab, and the Project Management simulation example on another tab.  Project Management_Example.csv is an example file that can be uploaded in the "file upload" mode of the Project Management Simulation.  A published version of this Shiny app is here: https://sms13.shinyapps.io/MC_Examples/
+
  
