@@ -1,0 +1,191 @@
+---
+title: "Newsvendor Simulation"
+author: Steven Shechter
+output: html_document
+---
+
+
+```{r, include = FALSE}
+# chunks of R code that the report doesn't need to display (see note in the html markdown section below)
+library(dplyr)
+library(ggplot2)
+
+#####################################################################
+# Function: confidence_interval
+# What it does: returns the desired confidence interval bounds around a sample average, obtained from a vector of input data
+#####################################################################
+confidence_interval <- function(vector, interval) {
+  # Standard deviation of sample
+  vec_sd <- sd(vector)
+  # Sample size
+  n <- length(vector)
+  # Mean of sample
+  vec_mean <- mean(vector)
+  # Error according to t distribution
+  error <- qt((interval + 1)/2, df = n - 1) * vec_sd / sqrt(n)
+  # Confidence interval as a vector
+  result <- c(vec_mean - error, vec_mean + error)
+  return(result)
+}
+
+#####################################################################
+# Function: simulate_order_qs
+# What it does: runs simulation replications and stores relevant metrics of interest
+# for each order q starting from the lower limit to the upper in increments given.
+# The function changes values to some global vectors, as well as returns a vector of profits for 
+# further processing outside this function. 
+#####################################################################
+simulate_order_qs <- function(lower, upper, inc_amount) {
+  # outer loop to evaluate several different order quantities
+  for (order_quantity in seq(lower, upper, inc_amount))
+  {
+    profit_vector <- c()
+    # inner loop that evaluates each order quantity over "reps" number of 
+    # simulation replications
+    for (i in 1:reps)
+    {
+      demand <- round(runif(1, minU, maxU))
+      sales_quantity <- min(demand,order_quantity)
+      profit <- sale_price * sales_quantity - purchase_cost * order_quantity
+      profit_vector[i] <- profit # store value
+    }#end inner for loop over replications
+    
+    # append results to vectors that store summary results from the "reps" replications of each order quantity
+    order_quantity_vector <<- c(order_quantity_vector, order_quantity)
+    expected_profit = mean(profit_vector)
+    expected_profit_vector <<- c(expected_profit_vector, expected_profit) # << lets R know this is a global variable to make a change to, rather than local
+    ci <- confidence_interval(profit_vector, .95)
+    lower_ci_vector <<- c(lower_ci_vector, ci[1])
+    upper_ci_vector <<- c(upper_ci_vector, ci[2]) 
+    
+  } #end outer for loop over different order quantities
+  return(profit_vector) #returns the vector of reps values of profits for the final order quantity evaluated
+  # this is only useful if we are running in evaluate mode and then want to look more closely at some metrics around the entire distribution of profits for that order quantity of interest
+  # we can post-process the profit_vector however we want
+}# end function simulate_order_qs()
+```
+
+### Overview:
+This example simulates and analyzes the Newsvendor Problem.  There is a related Shiny version of this model in Newsvendor_app.R 
+
+*Note: there are several chunks of R code that aren't useful to display in this report, so they don't appear here, but they does appear in the .Rmd file.  For example, I hide the R code that creates functions, initialization of some variables, etc.  It's not particularly interesting for the reader of this report.  One can dig into the .Rmd file itself for this.*
+
+***
+
+### Model inputs:
+The key model inputs of the Newsvendor problem are:
+
+* Purchase cost
+* Resale price
+* Demand distribution
+
+For this model, we will assume the demand is Uniformly distributed between [minU, maxU]. (the Shiny version lets the user also consider a Normal distribution)
+We will also set the number of simulation replications and the random number seed in the following code chunk.  By fixing the random number seed, we are able to replicate the simulation results shown in this report each time:
+
+```{r}
+purchase_cost <- 0.25
+sale_price <- 1
+minU <- 100
+maxU <- 200
+
+reps <- 5000
+set.seed(1)
+```
+
+
+### Evaluating a specific order quantity:
+First, we will run simulations and analysis on a specific order quantity. Later, we will search for an optimal order quantity.
+```{r}
+order_q <- 175  # change this to whatever order quantity you want to evaluate 
+```
+
+Showing the average profit performance as well as the entire histogram of profits across the simulation replications:
+
+```{r, echo = FALSE}
+#initialize global variables and vectors
+expected_profit_vector <- c()
+order_quantity_vector <- c()
+lower_ci_vector <- c()
+upper_ci_vector <- c()
+
+lower_search_limit = 175
+upper_search_limit = 175
+inc_amount = 0
+# the above three values make it so the function below will just evaluate the one order quantity of interest.  much of the code is set up to be general to accomodate the situation with multiple order quantities as well, hence this approach.
+profits <- simulate_order_qs(lower_search_limit, upper_search_limit, inc_amount) # runs the simulations
+index <- which.max(expected_profit_vector)
+opt_order_q <- order_quantity_vector[index]
+opt_profit <-  expected_profit_vector[index] #again, clearly the opt profit is from the single order quantity we consider; this is just set up for the general case where we might have multiple order quantites and their metrics saved in the expected_profit_vector 
+plus_minus <-  upper_ci_vector[index] - expected_profit_vector[index] # gives 95% CI half-width
+
+# write out stats/visualizations of interest:
+print(sprintf("The average profit (and 95%% CI half-width) associted with order_q = %d is: %.2f +/- %.2f ", order_q, opt_profit, plus_minus))
+
+#dataframe created for feeding into ggplot:
+df_PM = data.frame(profits)  # recall, profits is the vector returned by simulate_order_qs
+
+#histogram of output with sliders for tail percentiles
+ggplot(df_PM, aes(x = profits))  + geom_histogram(binwidth = 2, color="darkblue", fill="lightblue")
+
+```
+
+### Evaluate several order quantities:
+The code will evaluate order quantites from `r minU` to `r maxU` in increments spaced 1/20 of the distance between the two.  It will identify the order quantity among these that yields the best (sample) average profit, and plot all of the averages and the +/- 95% confidence interval band.
+
+```{r, echo = FALSE}
+#initialize global variables and vectors
+expected_profit_vector <- c()
+order_quantity_vector <- c()
+lower_ci_vector <- c()
+upper_ci_vector <- c()
+
+lower_search_limit = minU
+upper_search_limit = maxU
+# the .05 is me hard coding basically that we will splice the outer evaluation
+# loop into 20 intervals.  So our "optimization" mode is to be understood as
+# optimizing at that level of granularity. Could make inc_amount = 1 if want to evaluate every 
+# order quantity between lower and upper limits
+inc_amount <- as.integer(.05*(upper_search_limit - lower_search_limit))
+
+profits <- simulate_order_qs(lower_search_limit, upper_search_limit, inc_amount)
+  
+# find order quant that maximizes expected profit
+index <- which.max(expected_profit_vector)
+opt_order_q <- order_quantity_vector[index]
+opt_profit <-  expected_profit_vector[index]
+# the +/- 95% CI half width
+plus_minus <-  upper_ci_vector[index] - expected_profit_vector[index] 
+# the above will be written out in the summary results
+
+# building dataframe to feed to ggplot.  Note, because ggplot uses "grouping"
+# to create different curves on same plot, there is one column of y-values in this df,
+# given by "value_vector".  
+# df1 creates a df where these values are the sample averages and we label it
+# with "avg" as the type.
+# We will create two other dfs, one for each of lower and upper CI limits, and
+# then combine the 3 through rbind.  Then see how we use the type_vector in ggplot
+
+value_vector <- expected_profit_vector
+type_vector <- rep("avg", times = length(value_vector) )
+df1 <- data.frame(order_quantity_vector, value_vector, type_vector)
+
+value_vector <- lower_ci_vector
+type_vector <- rep("lower 95% CI", times = length(lower_ci_vector) )
+df2 <- data.frame(order_quantity_vector, value_vector, type_vector)
+
+value_vector <- upper_ci_vector
+type_vector <- rep("upper 95% CI", times = length(upper_ci_vector) )
+df3 <- data.frame(order_quantity_vector, value_vector, type_vector)
+
+df4 <- rbind(df1, df2, df3)
+  
+print(sprintf("The average profit maximizing order quantity is: %d", opt_order_q))
+print(sprintf("The average profit (and 95%% CI half-width) from this is: %.2f +/- %.2f", opt_profit, plus_minus))
+
+# for plotting:
+ggplot(df4, aes(x = order_quantity_vector, y = value_vector, color=type_vector)) + geom_line() + geom_point() +
+  scale_color_manual(breaks = c("lower 95% CI", "avg","upper 95% CI"),
+                     values=c("blue", "red", "blue")) +
+  labs(x = "Order quantity", y = "Average profit") +
+  theme(legend.title = element_blank()) 
+```
