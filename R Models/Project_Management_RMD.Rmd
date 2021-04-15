@@ -1,0 +1,196 @@
+---
+title: "Project Management Simulation"
+author: "Steven Shechter"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+---
+
+
+```{r, include = FALSE}
+# chunks of R code that the report doesn't need to display (see note in the html markdown section below)
+library(dplyr)
+library(ggplot2)
+library(png)
+
+#####################################################################
+# Function: confidence_interval
+# What it does: returns the desired confidence interval bounds around a sample average, obtained from a vector of input data
+#####################################################################
+confidence_interval <- function(vector, interval) {
+  # Standard deviation of sample
+  vec_sd <- sd(vector)
+  # Sample size
+  n <- length(vector)
+  # Mean of sample
+  vec_mean <- mean(vector)
+  # Error according to t distribution
+  error <- qt((interval + 1)/2, df = n - 1) * vec_sd / sqrt(n)
+  # Confidence interval as a vector
+  result <- c(vec_mean - error, vec_mean + error)
+  return(result)
+}
+```
+
+### Overview
+This example demonstrates a Project Management simulation and analysis.  There is a related Shiny version of this model in a tab of MC_Simulation_Examples_app.R 
+
+***
+
+### Problem statement
+A project manager has come up with the following information for a computer design project.  It involves the following activities, precedence relationships, average duration (in weeks) $\mu_i$ for each activity $i$, along with a +/- % uncertainty multiplier $p_i$.  Assume the distribution of time for each activity $i$ is Uniformly distributed between $[\mu_i(1-p_i/100)$, $\mu_i(1+p_i/100)]$. 
+
+![Figure 1: Computer design project description.](PM.png)
+
+
+The network diagram of this project, along with Start/Finish times of each activity is as follows (if each activity took *exactly* its average duration):
+
+![Figure 2: Network Diagram.](PM_network.png)
+
+***
+
+### Questions to investigate
+
+* Before running any simulations, should we expect the mean project completion time (in which activity durations are uncertain) to be *less than*, *equal to*, or *greater than* the finish time shown in the network diagram above?
+  + What is the estimated mean project completion time?
+* What is the probability the project will take longer than 40 weeks to complete?
+* What does a histogram of possible project completion times look like? 
+* What is the lower and upper 5th percentiles of the project durations?
+
+***
+### Simulation setup
+
+Here we use R to develop the Monte Carlo simulation model that helps answer the above questions.  First, we read in a .csv file that contains the above information, in a slightly different format that will be helpful for simulating *any* project management model.
+
+```{r}
+data <- read.csv("PM_CSV.csv", header=TRUE)
+print(data)
+```
+
+Notice some differences between the format of this dataframe and the table shown in Figure 1.  The .csv file has separate columns for up to a maximum of three immediate predecessors per activity (the above example has activities with at most 2, but this program allows an additional one if another project requires it).  Also, the code will expect -1 indicated in the Predecessor field if there is no predecessor to list in that column.  
+**Important note:** the code assumes that activities have been labeled so that any predecessor activity index is lower than the current activity index.
+
+***
+
+Next, we simulate 1,000 independent replications of this project, where each replication draws random durations for each of the 7 activities, and determines the final completion time of the overall project.
+
+```{r}
+reps <- 1000  
+max_preds <- 3 # the maximum number of immediate predecessor activities
+project_durations <- c() # for recording the final project end time for each replication
+num_acts = length(data$Activities) #number of activites entered in the .csv
+
+# simulation replications
+for (i in 1:reps)
+{
+  #intialize vectors of each activity start/end times within each replication
+  activity_start_times <- rep(0, num_acts) 
+  activity_end_times <- rep(0, num_acts) 
+
+  for (j in 1:num_acts) 
+  {
+    #get random duration of each activity
+    avg <- data[j, "Average_Duration"] 
+    uncert_distance <- avg*(data[j, "Percent_Uncertainty"])/100
+    #generate U[avg - %, avg + %] random duration
+    activity_duration <- runif(1, avg-uncert_distance, avg+uncert_distance)
+    
+    #determine activity start time by checking for precedences
+    for (k in 1:max_preds)  
+    {
+      prec_activity_index <- data[j, k+1]  #the +1 is because first column is Activities
+      if (prec_activity_index > 0) #i.e., someone entered a precedence activity
+      {
+        # keep updating activity start time to be max between what is currently recorded and each
+        # precedent activity's end time.
+        # i.e., activity start time = 
+        #       max(end time over all precedence activities to this activity j)
+        activity_start_times[j] <- max(activity_start_times[j], activity_end_times[prec_activity_index])
+      }
+    }#end for k in 1:max_preds
+    
+    activity_end_times[j] = activity_start_times[j] + activity_duration
+  } #end for (j in 1:input$num_activities)
+
+  # record the project duration time of this replication as the end time of the final activity
+  project_durations[i] <- activity_end_times[num_acts] 
+}#end simulation replication loop
+```
+Simulation completed
+
+***
+
+### Answering the questions
+
+* Q: Before running any simulations, should we expect the mean project completion time (in which activity durations are uncertain) to be *less than*, *equal to*, or *greater than* the finish time shown in the network diagram above?
+  + What is the estimated mean project completion time?
+  
+For reasons discussed in class, if there are activities with more than one precedence activity, the expected completion time of the overall project will be *greater than* the estimated completion time obtained by using the averages alone.  This is one demonstration of "the Flaw of Averages."
+
+To quantify the estimate, we take the average completion time across the simulation replications:
+  
+```{r}
+avg <- round(mean(project_durations), 2)
+ci <- confidence_interval(project_durations, .95)
+plus_minus <- round(ci[2] - avg, 2) #plus_minus is the 95% CI half-width
+
+print(sprintf("The average project completion time (and 95%% CI half-width) is: %.2f +/- %.2f", avg, plus_minus))
+```
+
+***
+
+* Q: What is the probability the project will take longer than 40 weeks to complete?
+
+To answer this, we can calculate the proportion of simulation replications that had a project completion time greater than 40 weeks:
+```{r}
+#get prob of exceeding 40 weeks of total duration
+time_cutoff <- 40
+prob_exceed <- round(length(project_durations[project_durations > time_cutoff])/length(project_durations),2)
+
+print(sprintf("The probability of the project duration exceeding 40 weeks is %.2f", prob_exceed))
+```
+
+***
+
+* What does a histogram of possible project completion times look like? 
+
+```{r}
+bw = .5 # bin width for histograms
+#dataframe created for feeding into ggplot:
+df_PM = data.frame(project_durations)
+
+#histogram of output with sliders for tail percentiles
+ggplot(df_PM, aes(x = project_durations))  + geom_histogram(binwidth = bw, color="darkblue", fill="lightblue") + 
+  labs(title = "Histogram of possible project durations", x = "Duration", y = "Count")
+```
+<br>
+
+***
+
+* What is the lower and upper 5th percentiles of the project durations?
+
+We answer this numerically and also update the histogram to shade the lower-5th percentile Green and the upper-5th percentile Red:
+```{r}
+lower_percentile = 5  #i.e., if = 5, indicates that we want to obtaint the 5th percentile 
+upper_percentile = 5  #i.e., the (100-upper_percentile) percentile of durations; so if set to 5, it will return the 95th percentile
+
+val_of_lower_percentile = quantile(project_durations, lower_percentile/100)
+val_of_upper_percentile = quantile(project_durations, (100-upper_percentile)/100)
+
+print(sprintf("The lower %.2f percentile of durations occurs at duration = %.2f", lower_percentile, val_of_lower_percentile))
+print(sprintf("The upper %.2f percentile of durations occurs at duration = %.2f", upper_percentile,val_of_upper_percentile))
+
+#updated histogram of output shading
+ggplot(df_PM, aes(x = project_durations))  + geom_histogram(binwidth = bw, color="darkblue", fill="lightblue") + 
+  geom_histogram(data = subset(df_PM, project_durations <= val_of_lower_percentile), binwidth = bw, color="darkblue", fill="green")+ geom_histogram(data = subset(df_PM, project_durations >= val_of_upper_percentile), binwidth = bw, color="darkblue", fill="red") + labs(title = "Histogram of possible project durations", x = "Duration", y = "Count")
+
+
+```
+
+
+
+
+
+
