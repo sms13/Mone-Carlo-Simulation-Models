@@ -1,7 +1,11 @@
 ---
 title: "Newsvendor Simulation"
 author: Steven Shechter
-output: html_document
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: hide
 ---
 
 
@@ -66,9 +70,7 @@ simulate_order_qs <- function(lower, upper, inc_amount) {
 ```
 
 ### Overview:
-This example simulates and analyzes the Newsvendor Problem.  There is a related Shiny version of this model in Newsvendor_app.R 
-
-*Note: there are several chunks of R code that aren't useful to display in this report, so they don't appear here, but they does appear in the .Rmd file.  For example, I hide the R code that creates functions, initialization of some variables, etc.  It's not particularly interesting for the reader of this report.  One can dig into the .Rmd file itself for this.*
+This example simulates and analyzes the Newsvendor Problem.  There is a related Shiny version of this model in Newsvendor_app.R and the Newsvendor tab of MC_Simulation_Examples_app.R 
 
 ***
 
@@ -101,7 +103,7 @@ order_q <- 175  # change this to whatever order quantity you want to evaluate
 
 Showing the average profit performance as well as the entire histogram of profits across the simulation replications:
 
-```{r, echo = FALSE}
+```{r}
 #initialize global variables and vectors
 expected_profit_vector <- c()
 order_quantity_vector <- c()
@@ -132,7 +134,7 @@ ggplot(df_PM, aes(x = profits))  + geom_histogram(binwidth = 2, color="darkblue"
 ### Evaluate several order quantities:
 The code will evaluate order quantites from `r minU` to `r maxU` in increments spaced 1/20 of the distance between the two.  It will identify the order quantity among these that yields the best (sample) average profit, and plot all of the averages and the +/- 95% confidence interval band.
 
-```{r, echo = FALSE}
+```{r}
 #initialize global variables and vectors
 expected_profit_vector <- c()
 order_quantity_vector <- c()
